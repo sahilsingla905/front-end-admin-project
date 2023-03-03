@@ -23,8 +23,10 @@
 
 .collapsed {
   transform: scaleY(0);
+  display: none;
 }
 
 .expanded {
   transform: scaleY(1);
+  display: block;
 }

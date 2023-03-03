@@ -14,7 +14,7 @@ type ChildProps = {
 
 const AppTable = ({rows, columns}: ChildProps) => {
   return (
-    <TableContainer component={Paper}>
+    <TableContainer component={Paper} className="!shadow-none">
       <Table sx={{ minWidth: 650 }} aria-label="simple table">
         <TableHead>
           <TableRow>
@@ -28,6 +28,7 @@ const AppTable = ({rows, columns}: ChildProps) => {
             <TableRow
               key={'row' + idx}
               sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+              className="odd:bg-[#F1FAFE]"
             >
               {
                 Object.keys(columns).map((column) => {

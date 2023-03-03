@@ -8,9 +8,10 @@ type ChildProps = {
   transitionDelay?: number,
   transitionTimingFunction?: "linear" | "ease" | "ease-in" | "ease-out" | "ease-in-out" ,
   itemClass?: string,
+  containerClass?: string,
 }
 
-const ListItem: FC<ChildProps> = ({children, title, transitionDelay = 0.5, transitionTimingFunction = 'ease-out', itemClass = ""}) => {
+const ListItem: FC<ChildProps> = ({children, title, transitionDelay = 0.5, transitionTimingFunction = 'ease-out', itemClass = "", containerClass = ""}) => {
   const [collapsed, setCollapsed] = useState(true);
 
   const handleItemClick = () => {
@@ -22,7 +23,7 @@ const ListItem: FC<ChildProps> = ({children, title, transitionDelay = 0.5, trans
       <div className={`collapsible-item ${itemClass}`} onClick={handleItemClick}>
         {title}
       </div>
-      <div style={{transition: `transform ${transitionDelay}s ${transitionTimingFunction}`}} className={`content ${collapsed ? "collapsed": "expanded"}`}>
+      <div style={{transition: `transform ${transitionDelay}s ${transitionTimingFunction}`}} className={`content ${collapsed ? "collapsed": "expanded"} !bg-transparent ${containerClass}`}>
         {children}
       </div>
     </>

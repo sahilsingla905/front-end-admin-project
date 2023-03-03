@@ -6,7 +6,7 @@ type ChildProps = {
 
 const List = ({children}: ChildProps) => {
 	return (
-		<div>
+		<div className="flex flex-col gap-[5px]">
 			{children}
 		</div>
 	);

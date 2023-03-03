@@ -1,4 +1,4 @@
-import React, { FC, useCallback, useEffect, useState } from 'react';
+import React, { FC, useCallback, useEffect, useMemo, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -14,7 +14,30 @@ import ListItem from './components/list/ListItem';
 import { SelectComp, SelectOptionsType } from './components/select/Select';
 import { DatePicker  as MuiDatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-// import { Dayjs } from 'dayjs';
+import moment from 'moment';
+import AppTable from './components/table/Table';
+import List from './components/list/List';
+
+
+type ReportReponseType = {
+  amount: number,
+  created: string,
+  gatewayId: string,
+  modified: string,
+  projectId: string,
+  paymentId: string,
+  userIds: Array<string>,
+}
+
+type PorjectReportType = {
+  amount?: number,
+  total?: number,
+  date?: string,
+  gatewayId?: string,
+  paymentId?: string,
+}
+
+type ReportType = Record<string, PorjectReportType>
 
 
 function Main() {
@@ -24,6 +47,7 @@ function Main() {
   const [project, setProject] = useState<string>("all");
   const [startDateValue, setStartDateValue] = useState<any>(new Date('2021-01-01'));
   const [endDateValue, setEndDateValue] = useState<any>(new Date('2021-12-31'));
+  const [reportResult, setReportResult]=  useState<ReportType>({});
 
 
   useEffect(() => {
@@ -31,8 +55,9 @@ function Main() {
       const [gatewayResponse, projectsResponse] = await Promise.all([fetch("http://178.63.13.157:8090/mock-api/api/gateways"), fetch("http://178.63.13.157:8090/mock-api/api/projects")]);
       const { data: gatewayData, error: gatewayError } = await gatewayResponse.json();
       const { data, error } = await projectsResponse.json();
-      formatProjectOptions(data)
-      formatGatewayOptions(gatewayData)
+      setProjects(data);
+      setGateways(gatewayData);
+      generateReport();
     })();
   }, []);
 
@@ -45,7 +70,7 @@ function Main() {
         })
       })
 
-      setProjects(formattedData)
+      return formattedData;
   }
 
   const formatGatewayOptions = (data: any[]) => {
@@ -56,7 +81,7 @@ function Main() {
           value: project.gatewayId,
         })
       })
-      setGateways(formattedData)
+      return formattedData;
   }
 
   const onProjectChange = (value: string) => {
@@ -70,14 +95,64 @@ function Main() {
   const getLabel = (value: string, type: 'gateway' | 'project' ) => {
     switch (type) {
       case "gateway":
-        return  gateways.find((gateway) => gateway.value === value)?.label;
+        if (value === "all") {
+          return "All Gateways";
+        }
+        return  gateways.find((gateway) => gateway.gatewayId === value)?.name;
       case "project":
-        return projects.find((project) => project.value === value)?.label;
+        if (value === "all") {
+          return "All Projects";
+        }
+        return projects.find((project) => project.projectId === value)?.name;
       default:
         return "";
     }
   }
 
+  // function createTableData() {
+  //   return { name, calories, fat, carbs, protein };
+  // }
+  
+  const tableRows = useMemo(() => {
+    return Object.values(reportResult)
+  }, [reportResult]);
+
+  const tableColumns = {
+    date: 'Date',
+    gatewayId: 'Gateway',
+    paymentId: 'Transaction ID',
+    amount: 'Amount',
+  };
+
+  const generateReport = useCallback(async () => {
+    const reportRes = await fetch('http://178.63.13.157:8090/mock-api/api/report', {
+      method: 'post',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        ...(project !== "all" && { 'projectId': project }),
+        ...(gateway !== "all" && { 'gatewayId': project }),
+        from: moment(startDateValue).format("YYYY-MM-DD"),
+        to: moment(endDateValue).format("YYYY-MM-DD"),
+      })
+    });
+    const { data: reports } = await reportRes.json();
+    const formatReport: ReportType = {}
+    reports.forEach((report: ReportReponseType) => {
+    if (!formatReport[report?.projectId]) {
+      formatReport[report?.projectId] = {
+        total : 0,
+      };
+    }
+
+    formatReport[report?.projectId].amount = report.amount;
+    formatReport[report?.projectId].total = formatReport[report?.projectId].total as number + report.amount;
+    formatReport[report?.projectId].gatewayId = report.gatewayId;
+    formatReport[report?.projectId].date = report.created;
+    formatReport[report?.projectId].paymentId = report.paymentId;
+    });
+
+    setReportResult(formatReport);
+  }, [])
   return (
     <>
       <AppBar position="static" color="inherit">
@@ -109,8 +184,8 @@ function Main() {
               <p className='text-[#7E8299] text-[16px] leading-[19px] pt-1'>Easily generate a report of your transactions</p>
             </h2>
             <div className='flex gap-x-5'>
-              {!!projects.length && <SelectComp options={projects} label="Projects" onSelectClickHandler={onProjectChange} /> }
-              {!!gateways.length && <SelectComp options={gateways} label="Gateways" onSelectClickHandler={onGatewayChange} />}
+              {!!projects.length && <SelectComp options={formatProjectOptions(projects)} label="Projects" onSelectClickHandler={onProjectChange} /> }
+              {!!gateways.length && <SelectComp options={formatGatewayOptions(gateways)} label="Gateways" onSelectClickHandler={onGatewayChange} />}
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <MuiDatePicker
                   value={startDateValue}
@@ -135,7 +210,7 @@ function Main() {
                   className={`h-[32px] min-w-[135px] !bg-[#1BC5BD] !text-white custom-select !ring-0 !ring-[#1BC5BD] custom-date-picker rounded-[5px] w-[150px]`}
                 />
               </LocalizationProvider>
-              <Button variant="contained" className='h-[32px] px-2.5 py-2 !normal-case !bg-[#005B96]'>Generate report</Button>
+              <Button variant="contained" className='h-[32px] px-2.5 py-2 !normal-case !bg-[#005B96]' onClick={generateReport}>Generate report</Button>
             </div>
           </div>
           <div className='flex w-full gap-8'>
@@ -143,9 +218,18 @@ function Main() {
               <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px] mb-8'>
                 {getLabel(project, 'project')} | {getLabel(gateway, 'gateway')}
               </h2>
-              <ListItem title="List header" itemClass="!bg-white !text-[#011F4B] font-bold text-[16px] leading-[19px] !p-6">
-                Table
-              </ListItem>
+              <List>
+                {
+                  Object.keys(reportResult).map((projectId) => {
+                    return (
+                      <ListItem key={projectId} title={getLabel(projectId, 'project')} containerClass="!py-[14px]" itemClass="!bg-white !text-[#011F4B] font-bold text-[16px] leading-[19px] !p-6">
+                        <AppTable rows={tableRows} columns={tableColumns}/>
+                        {/* Lates */}
+                      </ListItem>
+                    )
+                  })
+                }
+              </List>
             </div>
             <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-6/12'>
               {/* graph */}
