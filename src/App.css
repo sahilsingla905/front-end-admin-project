@@ -5,3 +5,8 @@
 body {
   font-family: 'Roboto';
 }
+
+.custom-date-picker .MuiInputBase-root {
+  height: 32px;
+  color: #ffffff;
+}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { FC, useCallback, useEffect, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -9,15 +9,23 @@ import GridViewTwoToneIcon from '@mui/icons-material/GridViewTwoTone';
 import ComputerTwoToneIcon from '@mui/icons-material/ComputerTwoTone';
 import PieChartIcon from '@mui/icons-material/PieChart';
 import PowerSettingsNewTwoToneIcon from '@mui/icons-material/PowerSettingsNewTwoTone';
-import { Button } from '@mui/material';
+import { Button, TextField, TextFieldProps } from '@mui/material';
 import ListItem from './components/list/ListItem';
 import { SelectComp, SelectOptionsType } from './components/select/Select';
+import { DatePicker  as MuiDatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+// import { Dayjs } from 'dayjs';
+
 
 function Main() {
   const [projects, setProjects] = useState<Array<any>>([])
   const [gateways, setGateways] = useState<Array<any>>([])
-  const [gateway, setGateway] = useState<string>("all")
-  const [project, setProject] = useState<string>("all")
+  const [gateway, setGateway] = useState<string>("all");
+  const [project, setProject] = useState<string>("all");
+  const [startDateValue, setStartDateValue] = useState<any>(new Date('2021-01-01'));
+  const [endDateValue, setEndDateValue] = useState<any>(new Date('2021-12-31'));
+
+
   useEffect(() => {
     (async function () {
       const [gatewayResponse, projectsResponse] = await Promise.all([fetch("http://178.63.13.157:8090/mock-api/api/gateways"), fetch("http://178.63.13.157:8090/mock-api/api/projects")]);
@@ -103,16 +111,48 @@ function Main() {
             <div className='flex gap-x-5'>
               {!!projects.length && <SelectComp options={projects} label="Projects" onSelectClickHandler={onProjectChange} /> }
               {!!gateways.length && <SelectComp options={gateways} label="Gateways" onSelectClickHandler={onGatewayChange} />}
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <MuiDatePicker
+                  value={startDateValue}
+                  onChange={(newValue: any) => {
+                    setStartDateValue(newValue);
+                  }}
+                  renderInput={(params) => <TextField {...params} />}
+                  inputFormat="DD-MM-YYYY"
+                  maxDate={new Date('2021-12-30')}
+                  minDate={new Date('2021-01-01')}
+                  className={`h-[32px] min-w-[135px] !bg-[#1BC5BD] !text-white custom-select !ring-0 !ring-[#1BC5BD] custom-date-picker rounded-[5px] w-[150px]`}
+                />
+                <MuiDatePicker
+                  value={endDateValue}
+                  onChange={(newValue: any) => {
+                    setEndDateValue(newValue);
+                  }}
+                  renderInput={(params) => <TextField {...params} />}
+                  inputFormat="DD-MM-YYYY"
+                  maxDate={new Date('2021-12-31')}
+                  minDate={new Date('2021-01-02')}
+                  className={`h-[32px] min-w-[135px] !bg-[#1BC5BD] !text-white custom-select !ring-0 !ring-[#1BC5BD] custom-date-picker rounded-[5px] w-[150px]`}
+                />
+              </LocalizationProvider>
               <Button variant="contained" className='h-[32px] px-2.5 py-2 !normal-case !bg-[#005B96]'>Generate report</Button>
             </div>
           </div>
-          <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px]'>
-            <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px] mb-8'>
-              {getLabel(project, 'project')} | {getLabel(gateway, 'gateway')}
-            </h2>
-          <ListItem title="List header" itemClass="!bg-white !text-[#011F4B] font-bold text-[16px] leading-[19px] !p-6">
-            Table
-          </ListItem>
+          <div className='flex w-full gap-8'>
+            <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-6/12'>
+              <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px] mb-8'>
+                {getLabel(project, 'project')} | {getLabel(gateway, 'gateway')}
+              </h2>
+              <ListItem title="List header" itemClass="!bg-white !text-[#011F4B] font-bold text-[16px] leading-[19px] !p-6">
+                Table
+              </ListItem>
+            </div>
+            <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-6/12'>
+              {/* graph */}
+              <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px] mb-8'>
+                {getLabel(project, 'project')} | {getLabel(gateway, 'gateway')}
+              </h2>
+            </div>
           </div>
         </div>
       </div>
