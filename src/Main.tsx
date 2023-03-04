@@ -17,6 +17,11 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import moment from 'moment';
 import AppTable from './components/table/Table';
 import List from './components/list/List';
+import { formatCurrency } from './utils/CurrentFormat';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
+import { Doughnut } from "react-chartjs-2";
+
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 
 type ReportReponseType = {
@@ -30,6 +35,7 @@ type ReportReponseType = {
 }
 
 type PorjectReportType = {
+  gatewayName?: string,
   amount?: number,
   total?: number,
   date?: string,
@@ -39,6 +45,18 @@ type PorjectReportType = {
 
 type ReportType = Record<string, PorjectReportType>
 
+const doughnutData = {
+  labels: ['#A259FF', '#F24E1E', '#FFC107', '#6497B1'],
+  datasets: [
+    {
+      label: '# of Votes',
+      data: [12, 19, 3, 5, 2, 3],
+      backgroundColor: ['#A259FF', '#F24E1E', '#FFC107', '#6497B1'],
+      borderColor: ['#A259FF', '#F24E1E', '#FFC107', '#6497B1'],
+      borderWidth: 1,
+    },
+  ],
+};
 
 function Main() {
   const [projects, setProjects] = useState<Array<any>>([])
@@ -108,10 +126,6 @@ function Main() {
         return "";
     }
   }
-
-  // function createTableData() {
-  //   return { name, calories, fat, carbs, protein };
-  // }
   
   const tableRows = useMemo(() => {
     return Object.values(reportResult)
@@ -119,12 +133,13 @@ function Main() {
 
   const tableColumns = {
     date: 'Date',
-    gatewayId: 'Gateway',
+    gatewayName: 'Gateway',
     paymentId: 'Transaction ID',
     amount: 'Amount',
   };
 
   const generateReport = useCallback(async () => {
+    console.log("s = ", startDateValue, endDateValue, moment(startDateValue).format("YYYY-MM-DD"))
     const reportRes = await fetch('http://178.63.13.157:8090/mock-api/api/report', {
       method: 'post',
       headers: {'Content-Type':'application/json'},
@@ -144,6 +159,7 @@ function Main() {
       };
     }
 
+    formatReport[report?.projectId].gatewayName = getLabel(report.gatewayId, "gateway");
     formatReport[report?.projectId].amount = report.amount;
     formatReport[report?.projectId].total = formatReport[report?.projectId].total as number + report.amount;
     formatReport[report?.projectId].gatewayId = report.gatewayId;
@@ -152,7 +168,23 @@ function Main() {
     });
 
     setReportResult(formatReport);
-  }, [])
+  }, []);
+
+  const getTitle = (projectId: string) => {
+    const label = getLabel(projectId, 'project');
+    return (
+      <div className='flex justify-between'>
+        <span>
+          {label}
+        </span>
+        <span className='uppercase'>
+          Total: {formatCurrency(reportResult[projectId].total as number) as string} USD
+        </span>
+      </div>
+    )
+  }
+
+
   return (
     <>
       <AppBar position="static" color="inherit">
@@ -189,7 +221,7 @@ function Main() {
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <MuiDatePicker
                   value={startDateValue}
-                  onChange={(newValue: any) => {
+                  onChange={(newValue: any) => {  
                     setStartDateValue(newValue);
                   }}
                   renderInput={(params) => <TextField {...params} />}
@@ -222,9 +254,8 @@ function Main() {
                 {
                   Object.keys(reportResult).map((projectId) => {
                     return (
-                      <ListItem key={projectId} title={getLabel(projectId, 'project')} containerClass="!py-[14px]" itemClass="!bg-white !text-[#011F4B] font-bold text-[16px] leading-[19px] !p-6">
+                      <ListItem key={projectId} title={getTitle(projectId)} containerClass="!py-[14px]" itemClass="!bg-white !text-[#011F4B] font-bold text-[16px] leading-[19px] !p-6">
                         <AppTable rows={tableRows} columns={tableColumns}/>
-                        {/* Lates */}
                       </ListItem>
                     )
                   })
@@ -234,7 +265,7 @@ function Main() {
             <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-6/12'>
               {/* graph */}
               <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px] mb-8'>
-                {getLabel(project, 'project')} | {getLabel(gateway, 'gateway')}
+                <Doughnut data={{...doughnutData}} />
               </h2>
             </div>
           </div>
