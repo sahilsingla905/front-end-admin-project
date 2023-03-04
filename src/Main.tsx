@@ -20,6 +20,8 @@ import List from './components/list/List';
 import { formatCurrency } from './utils/CurrentFormat';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
+import { report } from 'process';
+import { type } from 'os';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -45,12 +47,29 @@ type PorjectReportType = {
 
 type ReportType = Record<string, PorjectReportType>
 
-const doughnutData = {
-  labels: ['#A259FF', '#F24E1E', '#FFC107', '#6497B1'],
+type ChartDatasetsType = {
+  label: string,
+  data: Array<number>,
+  backgroundColor: Array<string>,
+  borderColor: Array<string>,
+  borderWidth: number,
+}
+type DoughnutChartDataType = {
+  labels: Array<string>,
+  datasets: Array<ChartDatasetsType>,
+}
+
+type GraphLabelType = {
+  label: string,
+  color: string,
+}
+
+const doughnutData: DoughnutChartDataType = {
+  labels: [],
   datasets: [
     {
-      label: '# of Votes',
-      data: [12, 19, 3, 5, 2, 3],
+      label: 'Total',
+      data: [],
       backgroundColor: ['#A259FF', '#F24E1E', '#FFC107', '#6497B1'],
       borderColor: ['#A259FF', '#F24E1E', '#FFC107', '#6497B1'],
       borderWidth: 1,
@@ -63,9 +82,13 @@ function Main() {
   const [gateways, setGateways] = useState<Array<any>>([])
   const [gateway, setGateway] = useState<string>("all");
   const [project, setProject] = useState<string>("all");
+  const [showGraph, setShowGraph] = useState<boolean>(false);
   const [startDateValue, setStartDateValue] = useState<any>(new Date('2021-01-01'));
   const [endDateValue, setEndDateValue] = useState<any>(new Date('2021-12-31'));
   const [reportResult, setReportResult]=  useState<ReportType>({});
+  const [graphData, setGraphData]=  useState<DoughnutChartDataType>(doughnutData);
+  const [graphLabels, setGraphLabels]=  useState<Array<GraphLabelType>>([]);
+  const [grandTotal, setGrandTotal] = useState<number>(0); 
 
 
   useEffect(() => {
@@ -78,6 +101,12 @@ function Main() {
       generateReport();
     })();
   }, []);
+
+  // useEffect(() => {
+  //   if ((project !== "all" && gateway === "all") || (gateway !== "all" && project === "all")) {
+  //     formatGraphData();
+  //   }
+  // }, [reportResult, project, gateway])
 
   const formatProjectOptions = (data: any[]) => {
     const formattedData: Array<SelectOptionsType> = [{label: "All Projects", value: "all"}]
@@ -138,14 +167,30 @@ function Main() {
     amount: 'Amount',
   };
 
+  const formatGraphData = () => {
+    const labels: Array<GraphLabelType> = [];
+    let graphTotal = 0;
+    Object.keys(reportResult).forEach((projectId, index) => {
+      doughnutData.datasets?.[0].data.push(reportResult[projectId].total as number);
+      labels.push({
+        label: getLabel(projectId, "project"),
+        color: doughnutData.datasets[0].backgroundColor[index],
+      });
+      graphTotal += reportResult[projectId].total as number;
+    });
+
+    setGraphData(doughnutData);
+    setGraphLabels(labels);
+    setGrandTotal(graphTotal);
+  }
+
   const generateReport = useCallback(async () => {
-    console.log("s = ", startDateValue, endDateValue, moment(startDateValue).format("YYYY-MM-DD"))
     const reportRes = await fetch('http://178.63.13.157:8090/mock-api/api/report', {
       method: 'post',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         ...(project !== "all" && { 'projectId': project }),
-        ...(gateway !== "all" && { 'gatewayId': project }),
+        ...(gateway !== "all" && { 'gatewayId': gateway }),
         from: moment(startDateValue).format("YYYY-MM-DD"),
         to: moment(endDateValue).format("YYYY-MM-DD"),
       })
@@ -153,8 +198,12 @@ function Main() {
     const { data: reports } = await reportRes.json();
     const formatReport: ReportType = {}
     reports.forEach((report: ReportReponseType) => {
-    if (!formatReport[report?.projectId]) {
+    if (project === "all" && !formatReport[report?.projectId]) {
       formatReport[report?.projectId] = {
+        total : 0,
+      };
+    } else if (project !== "all" && !formatReport[report?.projectId]) {
+      formatReport[report?.gatewayId] = {
         total : 0,
       };
     }
@@ -168,7 +217,11 @@ function Main() {
     });
 
     setReportResult(formatReport);
-  }, []);
+    if ((project !== "all" && gateway === "all") || (gateway !== "all" && project === "all")) {
+      setShowGraph(true);
+      formatGraphData();
+    }
+  }, [project, gateway, getLabel, startDateValue, endDateValue]);
 
   const getTitle = (projectId: string) => {
     const label = getLabel(projectId, 'project');
@@ -184,6 +237,16 @@ function Main() {
     )
   }
 
+  const generateGraphLabel = (label: GraphLabelType) => {
+    return (
+      <div key={label.label} className='flex justify-center items-center gap-1'>
+        <div className="w-[15px] h-[15px] rounded-[5px]" style={{backgroundColor: `${label.color}`}}></div>
+        <div>
+          {label.label}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -246,7 +309,7 @@ function Main() {
             </div>
           </div>
           <div className='flex w-full gap-8'>
-            <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-6/12'>
+            <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-full'>
               <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px] mb-8'>
                 {getLabel(project, 'project')} | {getLabel(gateway, 'gateway')}
               </h2>
@@ -262,12 +325,23 @@ function Main() {
                 }
               </List>
             </div>
-            <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-6/12'>
-              {/* graph */}
-              <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px] mb-8'>
-                <Doughnut data={{...doughnutData}} />
-              </h2>
-            </div>
+            {showGraph && (
+              <div className='px-[19px]'>
+                <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-full flex gap-3'>
+                  {
+                    graphLabels.map((label) => {
+                      return generateGraphLabel(label);
+                    })
+                  }
+                </div>
+                <Doughnut data={{...graphData}} />
+                <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px]'>
+                  <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px]'>
+                    Gateway Total | {formatCurrency(grandTotal) as string} USD
+                  </h2>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
