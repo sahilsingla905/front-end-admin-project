@@ -9,13 +9,15 @@ type ChildProps = {
   transitionTimingFunction?: "linear" | "ease" | "ease-in" | "ease-out" | "ease-in-out" ,
   itemClass?: string,
   containerClass?: string,
+  listItemClickHandler?: () => void 
 }
 
-const ListItem: FC<ChildProps> = ({children, title, transitionDelay = 0.5, transitionTimingFunction = 'ease-out', itemClass = "", containerClass = ""}) => {
+const ListItem: FC<ChildProps> = ({children, title, transitionDelay = 0.5, transitionTimingFunction = 'ease-out', itemClass = "", containerClass = "", listItemClickHandler = () => {} }) => {
   const [collapsed, setCollapsed] = useState(true);
 
   const handleItemClick = () => {
     setCollapsed(!collapsed);
+    listItemClickHandler();
   };
 
   return (

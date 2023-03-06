@@ -24,7 +24,7 @@ const AppTable = ({rows, columns}: ChildProps) => {
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((row, idx) => (
+          {rows && rows.map((row, idx) => (
             <TableRow
               key={'row' + idx}
               sx={{ '&:last-child td, &:last-child th': { border: 0 } }}

@@ -13,8 +13,9 @@ type SelectType = {
     options: Array<SelectOptionsType>,
     defaultValue?: string,
     label?: string,
+    name?: string,
 };
-export const SelectComp: FC<SelectType> = ({ onSelectClickHandler = () => {}, selectClass = "", options, defaultValue = options[0].value, label = "" }) => {
+export const SelectComp: FC<SelectType> = ({ onSelectClickHandler = () => {}, selectClass = "", options, defaultValue = options[0].value, label = "", name = "" }) => {
   const [selectedValue, setSelectedValue] = React.useState(defaultValue);
 
   const handleChange = (event: SelectChangeEvent) => {
@@ -28,6 +29,7 @@ export const SelectComp: FC<SelectType> = ({ onSelectClickHandler = () => {}, se
         label={label}
         onChange={handleChange}
         className={`h-[32px] min-w-[135px] !bg-[#1BC5BD] !text-white custom-select !ring-0 !ring-[#1BC5BD] ${selectClass}`}
+        name={name}
       >
         {
             options.map((option) => {

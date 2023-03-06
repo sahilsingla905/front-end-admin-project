@@ -1,30 +1,21 @@
 import React, { FC, useCallback, useEffect, useMemo, useState } from 'react';
-import AppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
-import Typography from '@mui/material/Typography';
-import MenuIcon from '@mui/icons-material/Menu';
-import Container from '@mui/material/Container';
 import CreditCardTwoToneIcon from '@mui/icons-material/CreditCardTwoTone';
 import GridViewTwoToneIcon from '@mui/icons-material/GridViewTwoTone';
 import ComputerTwoToneIcon from '@mui/icons-material/ComputerTwoTone';
 import PieChartIcon from '@mui/icons-material/PieChart';
 import PowerSettingsNewTwoToneIcon from '@mui/icons-material/PowerSettingsNewTwoTone';
-import { Button, TextField, TextFieldProps } from '@mui/material';
 import ListItem from './components/list/ListItem';
-import { SelectComp, SelectOptionsType } from './components/select/Select';
-import { DatePicker  as MuiDatePicker, LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import moment from 'moment';
 import AppTable from './components/table/Table';
 import List from './components/list/List';
 import { formatCurrency } from './utils/CurrentFormat';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
-import { report } from 'process';
-import { type } from 'os';
+import dayjs from 'dayjs';
+import { Header } from './components/header/Header';
+import { Filter, FormInputType } from './components/filters/Filters';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
-
 
 type ReportReponseType = {
   amount: number,
@@ -43,9 +34,11 @@ type PorjectReportType = {
   date?: string,
   gatewayId?: string,
   paymentId?: string,
+  entityType?: string,
 }
 
-type ReportType = Record<string, PorjectReportType>
+type ReportType = Record<string, Array<PorjectReportType>>
+type ListReportType = Record<string, PorjectReportType>
 
 type ChartDatasetsType = {
   label: string,
@@ -60,8 +53,10 @@ type DoughnutChartDataType = {
 }
 
 type GraphLabelType = {
-  label: string,
+  title: string,
   color: string,
+  entityId?: string,
+  entityType: "project" | "gateway",
 }
 
 const doughnutData: DoughnutChartDataType = {
@@ -82,14 +77,21 @@ function Main() {
   const [gateways, setGateways] = useState<Array<any>>([])
   const [gateway, setGateway] = useState<string>("all");
   const [project, setProject] = useState<string>("all");
-  const [showGraph, setShowGraph] = useState<boolean>(false);
-  const [startDateValue, setStartDateValue] = useState<any>(new Date('2021-01-01'));
-  const [endDateValue, setEndDateValue] = useState<any>(new Date('2021-12-31'));
-  const [reportResult, setReportResult]=  useState<ReportType>({});
+  const [startDateValue, setStartDateValue] = useState<any>(dayjs(new Date('2021-01-01')));
+  const [endDateValue, setEndDateValue] = useState<any>(dayjs(new Date('2021-12-31')));
   const [graphData, setGraphData]=  useState<DoughnutChartDataType>(doughnutData);
   const [graphLabels, setGraphLabels]=  useState<Array<GraphLabelType>>([]);
   const [grandTotal, setGrandTotal] = useState<number>(0); 
+  
+  // table
+  const [tableColumns, setTableColumns] = useState<Record<string, string>>({});
+  const [reportTable, setReportTable] = useState<ReportType>({})
+  const [reportList, setReportList] = useState<Record<string, PorjectReportType>>({})
+  // const [reportResponse, setReportResponse] = useState<Array<ReportReponseType>>([])
 
+  // generate report
+  const [showGraph, setShowGraph] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
     (async function () {
@@ -98,54 +100,19 @@ function Main() {
       const { data, error } = await projectsResponse.json();
       setProjects(data);
       setGateways(gatewayData);
-      generateReport();
+      generateReportClickHandler(gatewayData, gateway, project);
     })();
   }, []);
 
-  // useEffect(() => {
-  //   if ((project !== "all" && gateway === "all") || (gateway !== "all" && project === "all")) {
-  //     formatGraphData();
-  //   }
-  // }, [reportResult, project, gateway])
-
-  const formatProjectOptions = (data: any[]) => {
-    const formattedData: Array<SelectOptionsType> = [{label: "All Projects", value: "all"}]
-      data.forEach((project) => {
-        formattedData.push({
-          label: project.name,
-          value: project.projectId,
-        })
-      })
-
-      return formattedData;
-  }
-
-  const formatGatewayOptions = (data: any[]) => {
-    const formattedData: Array<SelectOptionsType> = [{label: "All Gateways", value: "all"}]
-      data.forEach((project) => {
-        formattedData.push({
-          label: project.name,
-          value: project.gatewayId,
-        })
-      })
-      return formattedData;
-  }
-
-  const onProjectChange = (value: string) => {
-    setProject(value)
-  }
-
-  const onGatewayChange = (value: string) => {
-    setGateway(value)
-  }
-
-  const getLabel = (value: string, type: 'gateway' | 'project' ) => {
+  // Get chart labels
+  const getLabel = (value: string, type: 'gateway' | 'project', data: Array<any> = []) => {
     switch (type) {
       case "gateway":
         if (value === "all") {
           return "All Gateways";
         }
-        return  gateways.find((gateway) => gateway.gatewayId === value)?.name;
+        const gatewayList = gateways.length ?  gateways : data;
+        return  gatewayList.find((gateway) => gateway.gatewayId === value)?.name;
       case "project":
         if (value === "all") {
           return "All Projects";
@@ -155,115 +122,209 @@ function Main() {
         return "";
     }
   }
-  
-  const tableRows = useMemo(() => {
-    return Object.values(reportResult)
-  }, [reportResult]);
 
-  const tableColumns = {
-    date: 'Date',
-    gatewayName: 'Gateway',
-    paymentId: 'Transaction ID',
-    amount: 'Amount',
-  };
-
-  const formatGraphData = () => {
+  // Format graph data - doughnut
+  const formatGraphData = (formatReportList: ListReportType) => {
     const labels: Array<GraphLabelType> = [];
     let graphTotal = 0;
-    Object.keys(reportResult).forEach((projectId, index) => {
-      doughnutData.datasets?.[0].data.push(reportResult[projectId].total as number);
+    doughnutData.datasets[0].data = [];
+    Object.keys(formatReportList).forEach((entityId, index) => {
+      doughnutData.datasets?.[0].data.push(formatReportList[entityId].total as number);
       labels.push({
-        label: getLabel(projectId, "project"),
+        title: getLabel(entityId, formatReportList[entityId].entityType as 'gateway' | 'project'),
         color: doughnutData.datasets[0].backgroundColor[index],
+        entityId: entityId,
+        entityType: formatReportList[entityId].entityType as 'gateway' | 'project',
       });
-      graphTotal += reportResult[projectId].total as number;
+      graphTotal += formatReportList[entityId].total as number;
     });
 
     setGraphData(doughnutData);
     setGraphLabels(labels);
     setGrandTotal(graphTotal);
+    setShowGraph(true);
   }
 
-  const generateReport = useCallback(async () => {
+  // list data format
+  //  {
+  //   <entity_id>: {
+  //       listType:
+  //       total:
+  //   }
+  // }
+  const generateListReport =async (reports: Array<ReportReponseType>, selectedGateway: string, selectedProject: string) => {
+    const formatReportList: ListReportType = {};
+    reports.forEach((report: ReportReponseType) => {
+      let entityId = report?.projectId;
+      let entityType = "project";
+      if (selectedProject === "all" && selectedGateway === "all") {
+        // show projects list and gateway name col
+        entityId = report?.projectId;
+        entityType = "project";
+      } else if (selectedProject !== "all" && selectedGateway !== "all") {
+        // no list just table
+      } else {
+        if (selectedProject !== "all" && selectedGateway === "all") {
+          // show gateway list
+          entityId = report?.gatewayId;
+          entityType = "gateway";
+        } else if (selectedGateway !== "all" && selectedProject === "all") {
+          // show project list, no gateway col
+          entityId = report?.projectId;
+          entityType = "project";
+        }
+      }
+
+      if (!formatReportList[entityId]) {
+        formatReportList[entityId] = {
+          total: 0,
+        };
+      }
+      formatReportList[entityId].total = formatReportList[entityId].total as number + report.amount;
+      formatReportList[entityId].entityType = entityType;
+    });
+
+    setReportList(formatReportList);
+
+    if (selectedGateway === "all" || selectedProject === "all") {
+      formatGraphData(formatReportList);
+    } else {
+      setShowGraph(false);
+    }
+  }
+  // table format
+  // {
+  //   <entity_id>: [
+  //     {
+  //       amount:
+  //       date:  
+  //       paymentId:
+  //     }
+  //   ]
+  // }
+  const generateReportTableColumns = (selectedGateway: string, selectedProject: string) => {
+    const tableCols = {
+      date: 'Date',
+      ...(selectedProject === "all" && selectedGateway === "all" && { gatewayName: 'Gateway' }),
+      paymentId: 'Transaction ID',
+      amount: 'Amount',
+    };
+    setTableColumns(tableCols);
+  }
+
+  const generateTableReport = (reports: Array<ReportReponseType>, gatewayData: any, selectedGateway: string, selectedProject: string) => {
+    const formatReportTable: ReportType = {};
+
+    reports.forEach((report: ReportReponseType) => {
+      let entityId = report?.projectId;
+      let entityType = "project";
+      if (selectedProject === "all" && selectedGateway === "all") {
+        // show projects list and gateway name col
+        entityId = report?.projectId;
+        entityType = "project";
+      } else if (selectedProject !== "all" && selectedGateway !== "all") {
+        // no list just table
+        entityId = "both";
+        entityType = "both";
+      } else {
+        if (selectedProject !== "all" && selectedGateway === "all") {
+          // show gateway list
+          entityId = report?.gatewayId;
+          entityType = "gateway";
+        } else if (selectedGateway !== "all" && selectedProject === "all") {
+          // show project list, no gateway col
+          entityId = report?.projectId;
+          entityType = "project";
+        }
+      }
+
+      if (!formatReportTable[entityId]) {
+        formatReportTable[entityId] = [];
+      }
+
+      const entityTableReport: PorjectReportType = {
+        amount: report.amount,
+        gatewayName: getLabel(report.gatewayId, "gateway", gatewayData),
+        gatewayId: report.gatewayId,
+        date: report.created,
+        paymentId: report.paymentId,
+      };
+
+      formatReportTable[entityId].push(entityTableReport);
+    });
+
+    generateReportTableColumns(selectedGateway, selectedProject);
+    setReportTable(formatReportTable);
+    setIsLoading(false);
+  }
+
+  // Get report
+  // Generate report list and table
+  const generateReportClickHandler = async (gatewayData?: any, selectedGateway?: string, selectedProject?: string) => {
     const reportRes = await fetch('http://178.63.13.157:8090/mock-api/api/report', {
       method: 'post',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        ...(project !== "all" && { 'projectId': project }),
-        ...(gateway !== "all" && { 'gatewayId': gateway }),
-        from: moment(startDateValue).format("YYYY-MM-DD"),
-        to: moment(endDateValue).format("YYYY-MM-DD"),
+        ...(selectedProject !== "all" && { 'projectId': selectedProject }),
+        ...(selectedGateway !== "all" && { 'gatewayId': selectedGateway }),
+        from: moment(startDateValue.$d).format("YYYY-MM-DD"),
+        to: moment(endDateValue.$d).format("YYYY-MM-DD"),
       })
     });
     const { data: reports } = await reportRes.json();
-    const formatReport: ReportType = {}
-    reports.forEach((report: ReportReponseType) => {
-    if (project === "all" && !formatReport[report?.projectId]) {
-      formatReport[report?.projectId] = {
-        total : 0,
-      };
-    } else if (project !== "all" && !formatReport[report?.projectId]) {
-      formatReport[report?.gatewayId] = {
-        total : 0,
-      };
-    }
+    // setReportResponse(reports);
+    generateListReport(reports, selectedGateway as string, selectedProject as string);
+    generateTableReport(reports, gatewayData, selectedGateway as string, selectedProject as string);
+  }
 
-    formatReport[report?.projectId].gatewayName = getLabel(report.gatewayId, "gateway");
-    formatReport[report?.projectId].amount = report.amount;
-    formatReport[report?.projectId].total = formatReport[report?.projectId].total as number + report.amount;
-    formatReport[report?.projectId].gatewayId = report.gatewayId;
-    formatReport[report?.projectId].date = report.created;
-    formatReport[report?.projectId].paymentId = report.paymentId;
-    });
-
-    setReportResult(formatReport);
-    if ((project !== "all" && gateway === "all") || (gateway !== "all" && project === "all")) {
-      setShowGraph(true);
-      formatGraphData();
-    }
-  }, [project, gateway, getLabel, startDateValue, endDateValue]);
-
-  const getTitle = (projectId: string) => {
-    const label = getLabel(projectId, 'project');
+  const getTitle = (entityId: string, listType: 'gateway' | 'project') => {
+    const label = getLabel(entityId, listType);
     return (
       <div className='flex justify-between'>
         <span>
           {label}
         </span>
         <span className='uppercase'>
-          Total: {formatCurrency(reportResult[projectId].total as number) as string} USD
+          Total: {formatCurrency(reportList[entityId].total as number) as string} USD
         </span>
       </div>
     )
   }
 
   const generateGraphLabel = (label: GraphLabelType) => {
+    if (!label.title) {
+      label.title = getLabel(label?.entityId as string, label.entityType as 'gateway' | 'project');
+    }
+
     return (
-      <div key={label.label} className='flex justify-center items-center gap-1'>
+      <div key={label?.title} className='flex justify-center items-center gap-1'>
         <div className="w-[15px] h-[15px] rounded-[5px]" style={{backgroundColor: `${label.color}`}}></div>
         <div>
-          {label.label}
+          {label.title}
         </div>
       </div>
     )
   }
 
+  const formSubmitHandler =  (formValues: FormInputType) => {
+    setIsLoading(true);
+    setShowGraph(false);
+    const {
+      selectedGateway,
+      selectedProject,
+      selectedStartDate,
+      selectedEndDate,
+    } = formValues;
+    setGateway(selectedGateway);
+    setProject(selectedProject);
+    setEndDateValue(selectedEndDate);
+    setStartDateValue(selectedStartDate);
+    generateReportClickHandler(gateways, selectedGateway, selectedProject);
+  }
+
   return (
     <>
-      <AppBar position="static" color="inherit">
-        <Container maxWidth="xl">
-          <Toolbar disableGutters>
-            <img src="logo.png" className="mr-5" />
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1  }} >
-              <MenuIcon sx={{ display: { xs: 'none', md: 'flex' }, color: '#005B96'}} />
-            </Typography>
-            <div className='bg-[#F6CA65] h-[43px] w-[43px] rounded-[5px] font-bold leading-[27px] text-[23px] flex justify-center items-center mr-[11px] text-white'> JD</div>
-            <Typography className='text-[#005B96]'>
-              John Doe
-            </Typography>
-          </Toolbar>
-        </Container>
-      </AppBar>
+      <Header />
       <div className='flex gap-10'>
         <div className='flex flex-col gap-[27px] px-9 py-10'>
           <CreditCardTwoToneIcon sx={{ color: '#CDCCCC'}}/>
@@ -278,54 +339,47 @@ function Main() {
               Reports
               <p className='text-[#7E8299] text-[16px] leading-[19px] pt-1'>Easily generate a report of your transactions</p>
             </h2>
-            <div className='flex gap-x-5'>
-              {!!projects.length && <SelectComp options={formatProjectOptions(projects)} label="Projects" onSelectClickHandler={onProjectChange} /> }
-              {!!gateways.length && <SelectComp options={formatGatewayOptions(gateways)} label="Gateways" onSelectClickHandler={onGatewayChange} />}
-              <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <MuiDatePicker
-                  value={startDateValue}
-                  onChange={(newValue: any) => {  
-                    setStartDateValue(newValue);
-                  }}
-                  renderInput={(params) => <TextField {...params} />}
-                  inputFormat="DD-MM-YYYY"
-                  maxDate={new Date('2021-12-30')}
-                  minDate={new Date('2021-01-01')}
-                  className={`h-[32px] min-w-[135px] !bg-[#1BC5BD] !text-white custom-select !ring-0 !ring-[#1BC5BD] custom-date-picker rounded-[5px] w-[150px]`}
-                />
-                <MuiDatePicker
-                  value={endDateValue}
-                  onChange={(newValue: any) => {
-                    setEndDateValue(newValue);
-                  }}
-                  renderInput={(params) => <TextField {...params} />}
-                  inputFormat="DD-MM-YYYY"
-                  maxDate={new Date('2021-12-31')}
-                  minDate={new Date('2021-01-02')}
-                  className={`h-[32px] min-w-[135px] !bg-[#1BC5BD] !text-white custom-select !ring-0 !ring-[#1BC5BD] custom-date-picker rounded-[5px] w-[150px]`}
-                />
-              </LocalizationProvider>
-              <Button variant="contained" className='h-[32px] px-2.5 py-2 !normal-case !bg-[#005B96]' onClick={generateReport}>Generate report</Button>
-            </div>
+            <Filter
+              onFormSubmitHandler={(formValues) => formSubmitHandler(formValues)}
+              gateways={gateways}
+              projects={projects}
+            />
           </div>
           <div className='flex w-full gap-8'>
-            <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-full'>
-              <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px] mb-8'>
-                {getLabel(project, 'project')} | {getLabel(gateway, 'gateway')}
-              </h2>
-              <List>
+            {
+              isLoading && <>Loading...</>
+            }
+            {!isLoading && (
+              <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-full'>
+                <h2 className='text-[#005B96] font-bold text-[16px] leading-[18px] mb-8'>
+                  {getLabel(project, 'project')} | {getLabel(gateway, 'gateway')}
+                </h2>
+                {(project === "all" || gateway === "all") && (
+                  <List>
+                    {
+                      Object.keys(reportList).map((entityId) => {
+                        return (
+                          <ListItem
+                            key={entityId}
+                            title={getTitle(entityId, reportList[entityId].entityType as 'gateway' | 'project')}
+                            containerClass="!py-[14px]"
+                            itemClass="!bg-white !text-[#011F4B] font-bold text-[16px] leading-[19px] !p-6"
+                          >
+                            <AppTable rows={reportTable[entityId]} columns={tableColumns}/>
+                          </ListItem>
+                        )
+                      })
+                    }
+                  </List>
+                )}
                 {
-                  Object.keys(reportResult).map((projectId) => {
-                    return (
-                      <ListItem key={projectId} title={getTitle(projectId)} containerClass="!py-[14px]" itemClass="!bg-white !text-[#011F4B] font-bold text-[16px] leading-[19px] !p-6">
-                        <AppTable rows={tableRows} columns={tableColumns}/>
-                      </ListItem>
-                    )
-                  })
+                  project !== "all" && gateway !== "all" && reportTable && reportTable.both && (
+                    <AppTable rows={reportTable?.both} columns={tableColumns} />
+                  )
                 }
-              </List>
-            </div>
-            {showGraph && (
+              </div>
+            )}
+            {!isLoading && showGraph && (
               <div className='px-[19px]'>
                 <div className='mt-7 py-7 bg-[#F1FAFE] px-[19px] w-full flex gap-3'>
                   {
